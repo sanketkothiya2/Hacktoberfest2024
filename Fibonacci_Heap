@@ -1,0 +1,216 @@
+import java.util.ArrayList;
+import java.util.List;
+
+public class FibonacciHeap<T> {
+    private Node<T> minNode;
+    private int size;
+
+    // Inner class representing a node in the Fibonacci Heap
+    private static class Node<T> {
+        T key;
+        int degree = 0;  // Number of children
+        Node<T> parent;
+        Node<T> child;
+        Node<T> left;
+        Node<T> right;
+        boolean mark = false;  // For lazy deletion
+
+        public Node(T key) {
+            this.key = key;
+            left = this;
+            right = this;
+        }
+    }
+
+    // Insert a new key into the Fibonacci Heap
+    public void insert(T key) {
+        Node<T> node = new Node<>(key);
+        if (minNode == null) {
+            minNode = node;
+        } else {
+            mergeIntoRootList(minNode, node);
+            if (((Comparable<T>) node.key).compareTo(minNode.key) < 0) {
+                minNode = node;
+            }
+        }
+        size++;
+    }
+
+    // Merge two root lists in the Fibonacci Heap
+    private void mergeIntoRootList(Node<T> a, Node<T> b) {
+        b.left = a;
+        b.right = a.right;
+        a.right.left = b;
+        a.right = b;
+    }
+
+    // Find the minimum element in the Fibonacci Heap
+    public T findMin() {
+        if (minNode == null) {
+            return null;
+        }
+        return minNode.key;
+    }
+
+    // Extract the minimum element (delete the root) from the Fibonacci Heap
+    public T extractMin() {
+        if (minNode == null) {
+            return null;
+        }
+
+        Node<T> z = minNode;
+
+        // Move all children of the min node to the root list
+        if (z.child != null) {
+            List<Node<T>> children = new ArrayList<>();
+            Node<T> x = z.child;
+            do {
+                children.add(x);
+                x = x.right;
+            } while (x != z.child);
+
+            for (Node<T> child : children) {
+                mergeIntoRootList(minNode, child);
+                child.parent = null;
+            }
+        }
+
+        // Remove min node from the root list
+        z.left.right = z.right;
+        z.right.left = z.left;
+
+        if (z == z.right) {
+            minNode = null;
+        } else {
+            minNode = z.right;
+            consolidate();
+        }
+
+        size--;
+        return z.key;
+    }
+
+    // Consolidate the heap to ensure that trees have unique degrees
+    private void consolidate() {
+        int arraySize = ((int) Math.log(size) * 2) + 1;
+        List<Node<T>> degreeTable = new ArrayList<>(arraySize);
+
+        for (int i = 0; i < arraySize; i++) {
+            degreeTable.add(null);
+        }
+
+        List<Node<T>> rootList = new ArrayList<>();
+        Node<T> x = minNode;
+        if (x != null) {
+            do {
+                rootList.add(x);
+                x = x.right;
+            } while (x != minNode);
+        }
+
+        for (Node<T> w : rootList) {
+            x = w;
+            int d = x.degree;
+            while (degreeTable.get(d) != null) {
+                Node<T> y = degreeTable.get(d);
+
+                if (((Comparable<T>) y.key).compareTo(x.key) < 0) {
+                    Node<T> temp = y;
+                    y = x;
+                    x = temp;
+                }
+
+                link(y, x);
+                degreeTable.set(d, null);
+                d++;
+            }
+            degreeTable.set(d, x);
+        }
+
+        minNode = null;
+        for (Node<T> y : degreeTable) {
+            if (y == null) continue;
+            if (minNode == null || ((Comparable<T>) y.key).compareTo(minNode.key) < 0) {
+                minNode = y;
+            }
+        }
+    }
+
+    // Link two nodes in the Fibonacci Heap
+    private void link(Node<T> y, Node<T> x) {
+        y.left.right = y.right;
+        y.right.left = y.left;
+
+        y.parent = x;
+
+        if (x.child == null) {
+            x.child = y;
+            y.right = y;
+            y.left = y;
+        } else {
+            mergeIntoRootList(x.child, y);
+        }
+
+        x.degree++;
+        y.mark = false;
+    }
+
+    // Decrease the key of a node in the Fibonacci Heap
+    public void decreaseKey(Node<T> x, T k) {
+        if (((Comparable<T>) k).compareTo(x.key) > 0) {
+            throw new IllegalArgumentException("New key is greater than current key");
+        }
+
+        x.key = k;
+        Node<T> y = x.parent;
+
+        if (y != null && ((Comparable<T>) x.key).compareTo(y.key) < 0) {
+            cut(x, y);
+            cascadingCut(y);
+        }
+
+        if (((Comparable<T>) x.key).compareTo(minNode.key) < 0) {
+            minNode = x;
+        }
+    }
+
+    // Cut operation to separate a node from its parent
+    private void cut(Node<T> x, Node<T> y) {
+        x.left.right = x.right;
+        x.right.left = x.left;
+        y.degree--;
+
+        if (x == x.right) {
+            y.child = null;
+        } else {
+            y.child = x.right;
+        }
+
+        mergeIntoRootList(minNode, x);
+        x.parent = null;
+        x.mark = false;
+    }
+
+    // Cascading cut to ensure the heap structure is maintained
+    private void cascadingCut(Node<T> y) {
+        Node<T> z = y.parent;
+        if (z != null) {
+            if (!y.mark) {
+                y.mark = true;
+            } else {
+                cut(y, z);
+                cascadingCut(z);
+            }
+        }
+    }
+
+    // Check if the heap is empty
+    public boolean isEmpty() {
+        return minNode == null;
+    }
+
+    // Return the size of the Fibonacci Heap
+    public int size() {
+        return size;
+    }
+}
